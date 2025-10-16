@@ -18,9 +18,12 @@ load_dotenv()
 app = FastAPI(title="Optical Design Chat API")
 
 # Enable CORS for your frontend
+# Get allowed origins from environment variable or use default
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=ALLOWED_ORIGINS,  # Configure via ALLOWED_ORIGINS env var
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

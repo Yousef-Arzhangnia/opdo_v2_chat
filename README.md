@@ -250,17 +250,93 @@ You can test the API using:
 
 ## Production Deployment
 
-For production:
+### Deploy to Render.com (Recommended)
 
-1. Update CORS settings in `app.py` to only allow your frontend domain
-2. Use a production ASGI server like gunicorn with uvicorn workers:
+Render.com offers free hosting for web services, perfect for this API.
+
+#### Step 1: Prepare Your Repository
+
+Make sure all files are committed to your Git repository:
+
+```bash
+git add .
+git commit -m "Add optical design chat API"
+git push origin main
+```
+
+#### Step 2: Create Render Account
+
+1. Go to [render.com](https://render.com) and sign up
+2. Connect your GitHub/GitLab account
+
+#### Step 3: Deploy
+
+1. Click **"New +"** → **"Web Service"**
+2. Connect your repository
+3. Render will auto-detect the `render.yaml` configuration
+4. Configure environment variables:
+   - Click **"Environment"** tab
+   - Add `ANTHROPIC_API_KEY` with your API key
+   - (Optional) Add `ALLOWED_ORIGINS` with your frontend URL (e.g., `https://yourdomain.com`)
+5. Click **"Create Web Service"**
+
+Render will automatically:
+- Install dependencies from `requirements.txt`
+- Start the server with uvicorn
+- Provide you with a URL like `https://optical-design-api.onrender.com`
+
+#### Step 4: Update Your Frontend
+
+Update your frontend to use the deployed URL:
+
+```typescript
+const API_URL = 'https://your-app-name.onrender.com';
+
+const response = await fetch(`${API_URL}/api/design`, {
+  method: 'POST',
+  // ... rest of your request
+});
+```
+
+#### Render Configuration Files
+
+This repository includes:
+- `render.yaml` - Render deployment configuration
+- `runtime.txt` - Python version specification
+
+#### Environment Variables on Render
+
+Set these in the Render dashboard:
+- `ANTHROPIC_API_KEY` (required) - Your Claude API key
+- `ALLOWED_ORIGINS` (optional) - Comma-separated list of allowed frontend URLs
+  - Example: `https://myapp.com,https://www.myapp.com`
+  - Default: `*` (allow all origins)
+
+### Alternative: Deploy Manually
+
+For other platforms (Railway, Fly.io, etc.):
+
+1. Use a production ASGI server:
    ```bash
    pip install gunicorn
-   gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+   gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
    ```
-3. Set up environment variables securely (not in .env file)
-4. Use HTTPS/TLS encryption
-5. Consider rate limiting and authentication
+2. Set environment variables securely
+3. Configure CORS via `ALLOWED_ORIGINS` environment variable
+4. Enable HTTPS/TLS encryption
+
+### Free Tier Limitations
+
+**Render Free Tier:**
+- Service spins down after 15 minutes of inactivity
+- First request after inactivity takes ~30-60 seconds (cold start)
+- 750 hours/month free
+- Good for development and low-traffic production
+
+**Solutions for Cold Starts:**
+- Upgrade to paid tier ($7/month) for always-on service
+- Use a service like [cron-job.org](https://cron-job.org) to ping your API every 10 minutes
+- Show a loading message to users on first request
 
 ## Troubleshooting
 
