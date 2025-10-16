@@ -38,9 +38,17 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 class OpticalDesignRequest(BaseModel):
     """Request model for optical design generation"""
     user_message: str = Field(..., description="User's optical design requirement")
-    conversation_history: Optional[List[dict]] = Field(
+    system_message: Optional[str] = Field(
         default=None,
-        description="Optional conversation history for context"
+        description="Custom system instruction to guide the design generation"
+    )
+    previous_design: Optional[dict] = Field(
+        default=None,
+        description="Previous optical design for memory/iteration context"
+    )
+    added_data: Optional[dict] = Field(
+        default=None,
+        description="Additional data that might be useful for future extensions"
     )
 
 
@@ -158,18 +166,48 @@ async def generate_optical_design(request: OpticalDesignRequest):
     Generate an optical design based on user requirements.
 
     Args:
-        request: OpticalDesignRequest containing user message and optional history
+        request: OpticalDesignRequest containing user message, system message,
+                 previous design, and additional data
 
     Returns:
         OpticalDesignResponse containing the generated optical design
     """
     try:
+        # Build the system prompt
+        system_prompt = SYSTEM_PROMPT
+
+        # If custom system_message is provided, append it to the default prompt
+        if request.system_message:
+            system_prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+
         # Prepare messages for Claude
         messages = []
 
-        # Add conversation history if provided
-        if request.conversation_history:
-            messages.extend(request.conversation_history)
+        # Build context message if previous_design or added_data exists
+        context_parts = []
+
+        if request.previous_design:
+            context_parts.append(
+                f"PREVIOUS DESIGN (for reference/iteration):\n{json.dumps(request.previous_design, indent=2)}"
+            )
+
+        if request.added_data:
+            context_parts.append(
+                f"ADDITIONAL CONTEXT:\n{json.dumps(request.added_data, indent=2)}"
+            )
+
+        # If there's context, add it as a system message first
+        if context_parts:
+            context_message = "\n\n".join(context_parts)
+            messages.append({
+                "role": "user",
+                "content": context_message
+            })
+            # Add assistant acknowledgment
+            messages.append({
+                "role": "assistant",
+                "content": "I've noted the previous design and additional context. I'll use this information to help with the current request."
+            })
 
         # Add current user message
         messages.append({
@@ -181,7 +219,7 @@ async def generate_optical_design(request: OpticalDesignRequest):
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",  # Use latest Claude model
             max_tokens=4096,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             messages=messages
         )
 
@@ -233,9 +271,40 @@ async def chat_endpoint(request: OpticalDesignRequest):
     Alternative endpoint that returns raw Claude response for more flexible chat.
     """
     try:
+        # Build the system prompt
+        system_prompt = SYSTEM_PROMPT
+
+        # If custom system_message is provided, append it
+        if request.system_message:
+            system_prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+
+        # Prepare messages
         messages = []
-        if request.conversation_history:
-            messages.extend(request.conversation_history)
+
+        # Build context message if previous_design or added_data exists
+        context_parts = []
+
+        if request.previous_design:
+            context_parts.append(
+                f"PREVIOUS DESIGN (for reference/iteration):\n{json.dumps(request.previous_design, indent=2)}"
+            )
+
+        if request.added_data:
+            context_parts.append(
+                f"ADDITIONAL CONTEXT:\n{json.dumps(request.added_data, indent=2)}"
+            )
+
+        # If there's context, add it first
+        if context_parts:
+            context_message = "\n\n".join(context_parts)
+            messages.append({
+                "role": "user",
+                "content": context_message
+            })
+            messages.append({
+                "role": "assistant",
+                "content": "I've noted the previous design and additional context. I'll use this information to help with the current request."
+            })
 
         messages.append({
             "role": "user",
@@ -245,7 +314,7 @@ async def chat_endpoint(request: OpticalDesignRequest):
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=4096,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             messages=messages
         )
 

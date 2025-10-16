@@ -58,9 +58,17 @@ Generate an optical design from a natural language description.
 ```json
 {
   "user_message": "Design a simple achromatic doublet lens for visible light",
-  "conversation_history": []  // Optional
+  "system_message": "Focus on minimizing chromatic aberration",  // Optional
+  "previous_design": { /* previous optical design object */ },    // Optional
+  "added_data": { "priority": "image_quality" }                  // Optional
 }
 ```
+
+**Request Parameters:**
+- `user_message` (required): User's optical design requirement or question
+- `system_message` (optional): Custom instructions to guide the design generation
+- `previous_design` (optional): Previous design object for iteration/memory
+- `added_data` (optional): Any additional context data for future use
 
 **Response:**
 ```json
@@ -122,7 +130,12 @@ Health check endpoint.
 Update your frontend to make POST requests to this backend:
 
 ```typescript
-async function generateOpticalDesign(userMessage: string) {
+async function generateOpticalDesign(
+  userMessage: string,
+  systemMessage?: string,
+  previousDesign?: any,
+  addedData?: any
+) {
   const response = await fetch('http://localhost:8000/api/design', {
     method: 'POST',
     headers: {
@@ -130,7 +143,9 @@ async function generateOpticalDesign(userMessage: string) {
     },
     body: JSON.stringify({
       user_message: userMessage,
-      conversation_history: []  // Add previous messages if needed
+      system_message: systemMessage || null,
+      previous_design: previousDesign || null,
+      added_data: addedData || null
     })
   });
 
@@ -139,32 +154,65 @@ async function generateOpticalDesign(userMessage: string) {
 }
 ```
 
+### Example Usage with Memory
+
+```typescript
+// First design
+const design1 = await generateOpticalDesign(
+  "Design a simple lens",
+  "Keep it compact",
+  null,
+  { application: "camera" }
+);
+
+// Iterate on the design (with memory)
+const design2 = await generateOpticalDesign(
+  "Make the focal length shorter",
+  "Maintain the same diameter",
+  design1,  // Pass previous design for memory
+  { iteration: 2 }
+);
+```
+
 ## Example Requests
 
 ### Simple Lens
 ```bash
 curl -X POST http://localhost:8000/api/design \
   -H "Content-Type: application/json" \
-  -d '{"user_message": "Design a simple plano-convex lens with 50mm focal length"}'
+  -d '{
+    "user_message": "Design a simple plano-convex lens with 50mm focal length",
+    "system_message": null,
+    "previous_design": null,
+    "added_data": null
+  }'
 ```
 
-### Achromatic Doublet
-```bash
-curl -X POST http://localhost:8000/api/design \
-  -H "Content-Type: application/json" \
-  -d '{"user_message": "Create an achromatic doublet for telescope objective, 100mm diameter"}'
-```
-
-### With Conversation History
+### Achromatic Doublet with Custom Instructions
 ```bash
 curl -X POST http://localhost:8000/api/design \
   -H "Content-Type: application/json" \
   -d '{
-    "user_message": "Make the focal length shorter",
-    "conversation_history": [
-      {"role": "user", "content": "Design a simple lens"},
-      {"role": "assistant", "content": "...previous response..."}
-    ]
+    "user_message": "Create an achromatic doublet for telescope objective, 100mm diameter",
+    "system_message": "Optimize for minimal chromatic aberration across visible spectrum",
+    "previous_design": null,
+    "added_data": {"application": "astronomy", "budget": "mid-range"}
+  }'
+```
+
+### Iterate on Previous Design
+```bash
+curl -X POST http://localhost:8000/api/design \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_message": "Make the focal length shorter and improve edge performance",
+    "system_message": "Keep the same materials if possible",
+    "previous_design": {
+      "source": {...},
+      "lenses": [...],
+      "image_plane_x_mm": 100.0
+    },
+    "added_data": {"iteration": 2, "priority": "edge_sharpness"}
   }'
 ```
 

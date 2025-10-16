@@ -23,7 +23,10 @@ def test_simple_design():
     print("\n=== Testing Simple Lens Design ===")
 
     request_data = {
-        "user_message": "Design a simple plano-convex lens with 50mm focal length for visible light"
+        "user_message": "Design a simple plano-convex lens with 50mm focal length for visible light",
+        "system_message": None,
+        "previous_design": None,
+        "added_data": None
     }
 
     response = requests.post(
@@ -49,7 +52,10 @@ def test_doublet_design():
     print("\n=== Testing Achromatic Doublet Design ===")
 
     request_data = {
-        "user_message": "Design an achromatic doublet lens system with 100mm focal length and 25mm diameter for astronomy applications"
+        "user_message": "Design an achromatic doublet lens system with 100mm focal length and 25mm diameter for astronomy applications",
+        "system_message": "Focus on minimizing chromatic aberration across the visible spectrum",
+        "previous_design": None,
+        "added_data": {"application": "astronomy", "priority": "chromatic_correction"}
     }
 
     response = requests.post(
@@ -70,13 +76,16 @@ def test_doublet_design():
         return False
 
 
-def test_with_conversation_history():
-    """Test with conversation history for context"""
-    print("\n=== Testing With Conversation History ===")
+def test_with_previous_design():
+    """Test with previous design for iteration"""
+    print("\n=== Testing With Previous Design (Memory) ===")
 
     # First request
     first_request = {
-        "user_message": "Design a simple converging lens"
+        "user_message": "Design a simple converging lens",
+        "system_message": None,
+        "previous_design": None,
+        "added_data": None
     }
 
     print("\nFirst request...")
@@ -93,16 +102,15 @@ def test_with_conversation_history():
     first_result = response1.json()
     print("First design received")
 
-    # Second request with history
+    # Second request with previous design
     second_request = {
         "user_message": "Now make it shorter focal length and add another lens for chromatic correction",
-        "conversation_history": [
-            {"role": "user", "content": first_request["user_message"]},
-            {"role": "assistant", "content": json.dumps(first_result["design"])}
-        ]
+        "system_message": "Keep the same diameter and materials where possible",
+        "previous_design": first_result["design"],
+        "added_data": {"iteration": 2, "modification_type": "focal_length_reduction"}
     }
 
-    print("\nSecond request with history...")
+    print("\nSecond request with previous design...")
     response2 = requests.post(
         f"{BASE_URL}/api/design",
         json=second_request,
@@ -126,7 +134,10 @@ def test_chat_endpoint():
     print("\n=== Testing Chat Endpoint ===")
 
     request_data = {
-        "user_message": "Design a microscope objective lens with high numerical aperture"
+        "user_message": "Design a microscope objective lens with high numerical aperture",
+        "system_message": "Prioritize high resolution and image quality",
+        "previous_design": None,
+        "added_data": {"target_NA": 0.95, "magnification": "40x"}
     }
 
     response = requests.post(
@@ -158,7 +169,7 @@ def run_all_tests():
         ("Simple Lens Design", test_simple_design),
         ("Achromatic Doublet Design", test_doublet_design),
         ("Chat Endpoint", test_chat_endpoint),
-        ("Conversation History", test_with_conversation_history),
+        ("Previous Design Memory", test_with_previous_design),
     ]
 
     results = []
