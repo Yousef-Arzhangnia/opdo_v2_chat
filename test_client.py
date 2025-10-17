@@ -6,7 +6,7 @@ Run this script to test the backend without a frontend.
 import requests
 import json
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://opdo-v2-chat.onrender.com"
 
 
 def test_health_check():
