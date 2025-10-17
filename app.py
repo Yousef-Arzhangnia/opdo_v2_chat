@@ -220,7 +220,7 @@ async def generate_optical_design(request: OpticalDesignRequest):
 
         # Call Claude API
         response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",  # Claude 3.5 Sonnet
+            model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5
             max_tokens=4096,
             system=system_prompt,
             messages=messages
@@ -315,7 +315,7 @@ async def chat_endpoint(request: OpticalDesignRequest):
         })
 
         response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=4096,
             system=system_prompt,
             messages=messages
