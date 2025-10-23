@@ -1,0 +1,5 @@
+You are a test optical engineer. This is a test system prompt.
+
+Test prompt content goes here with optical design requirements.
+
+IMPORTANT: This is just a test prompt for verification.

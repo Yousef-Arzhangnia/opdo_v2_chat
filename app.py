@@ -101,6 +101,23 @@ class OpticalDesignResponse(BaseModel):
     explanation: Optional[str] = None
 
 
+# System Prompt Management Models
+class SystemPromptRequest(BaseModel):
+    """Request model for saving system prompt"""
+    content: str = Field(..., description="The system prompt content")
+
+
+class SystemPromptResponse(BaseModel):
+    """Response model for system prompt retrieval"""
+    content: str = Field(..., description="The system prompt content")
+
+
+class SystemPromptSaveResponse(BaseModel):
+    """Response model for system prompt save operation"""
+    success: bool
+    message: str
+
+
 # System prompt for Claude
 SYSTEM_PROMPT = """You are an expert optical engineer specializing in lens design. Users will describe their optical design requirements, and you must generate complete, valid optical designs.
 
@@ -157,10 +174,89 @@ Respond ONLY with the JSON object, no markdown code blocks, no explanations outs
 If you want to provide an explanation, include it as a top-level "explanation" field in the JSON."""
 
 
+# System Prompt File Management
+SYSTEM_PROMPT_FILE = os.path.join("prompts", "system_prompt.txt")
+
+
+def get_stored_system_prompt() -> str:
+    """
+    Load the system prompt from file storage.
+    Returns the default SYSTEM_PROMPT if file doesn't exist.
+    """
+    try:
+        if os.path.exists(SYSTEM_PROMPT_FILE):
+            with open(SYSTEM_PROMPT_FILE, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                # Return stored prompt if it has content, otherwise use default
+                return content if content else SYSTEM_PROMPT
+        return SYSTEM_PROMPT
+    except Exception as e:
+        print(f"Error reading system prompt file: {e}")
+        return SYSTEM_PROMPT
+
+
+def save_system_prompt(content: str) -> None:
+    """
+    Save the system prompt to file storage.
+    Creates the prompts directory if it doesn't exist.
+    """
+    # Ensure prompts directory exists
+    os.makedirs(os.path.dirname(SYSTEM_PROMPT_FILE), exist_ok=True)
+
+    with open(SYSTEM_PROMPT_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
     return {"status": "ok", "message": "Optical Design Chat API is running"}
+
+
+@app.get("/api/system-prompt", response_model=SystemPromptResponse)
+async def get_system_prompt():
+    """
+    Get the current system prompt.
+    Returns the stored prompt if it exists, otherwise returns the default prompt.
+    """
+    try:
+        content = get_stored_system_prompt()
+        return SystemPromptResponse(content=content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving system prompt: {str(e)}"
+        )
+
+
+@app.post("/api/system-prompt", response_model=SystemPromptSaveResponse)
+async def update_system_prompt(request: SystemPromptRequest):
+    """
+    Save a new system prompt.
+    The prompt will be persisted to disk and used for future design generation requests.
+    """
+    try:
+        # Validate that content is not empty
+        if not request.content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="System prompt content cannot be empty"
+            )
+
+        # Save the prompt
+        save_system_prompt(request.content)
+
+        return SystemPromptSaveResponse(
+            success=True,
+            message="System prompt saved successfully"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error saving system prompt: {str(e)}"
+        )
 
 
 @app.post("/api/design", response_model=OpticalDesignResponse)
@@ -176,12 +272,14 @@ async def generate_optical_design(request: OpticalDesignRequest):
         OpticalDesignResponse containing the generated optical design
     """
     try:
-        # Build the system prompt
-        system_prompt = SYSTEM_PROMPT
+        # Build the system prompt - use stored prompt instead of hardcoded
+        base_system_prompt = get_stored_system_prompt()
 
-        # If custom system_message is provided, append it to the default prompt
+        # If custom system_message is provided, append it to the base prompt
         if request.system_message:
-            system_prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+            system_prompt = f"{base_system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+        else:
+            system_prompt = base_system_prompt
 
         # Prepare messages for Claude
         messages = []
@@ -274,12 +372,14 @@ async def chat_endpoint(request: OpticalDesignRequest):
     Alternative endpoint that returns raw Claude response for more flexible chat.
     """
     try:
-        # Build the system prompt
-        system_prompt = SYSTEM_PROMPT
+        # Build the system prompt - use stored prompt instead of hardcoded
+        base_system_prompt = get_stored_system_prompt()
 
         # If custom system_message is provided, append it
         if request.system_message:
-            system_prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+            system_prompt = f"{base_system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
+        else:
+            system_prompt = base_system_prompt
 
         # Prepare messages
         messages = []
