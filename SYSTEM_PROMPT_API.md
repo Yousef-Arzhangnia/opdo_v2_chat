@@ -4,20 +4,28 @@ This document describes the system prompt management endpoints added to the Fast
 
 ## Overview
 
-The system prompt can now be dynamically managed through API endpoints instead of being hardcoded. This allows frontend applications to customize the AI's behavior without requiring backend deployments.
+The system prompt consists of two parts:
+
+1. **Base System Prompt (Hardcoded)**: Contains the optical design schema, JSON structure requirements, and design rules. This is always included and cannot be modified to ensure valid optical designs are generated.
+
+2. **Custom Instructions (File-based)**: Additional instructions that are appended to the base prompt. These can be dynamically managed through API endpoints without requiring backend deployments.
+
+The final system prompt sent to Claude is: `BASE_PROMPT + CUSTOM_INSTRUCTIONS + PER_REQUEST_INSTRUCTIONS`
 
 ## Endpoints
 
 ### GET /api/system-prompt
 
-Retrieve the current system prompt.
+Retrieve the current custom instructions (not the full prompt, just the custom part).
 
 **Response:**
 ```json
 {
-  "content": "Your system prompt text here..."
+  "content": "Your custom instructions here..."
 }
 ```
+
+Returns an empty string if no custom instructions are set.
 
 **Example:**
 ```bash
@@ -37,12 +45,12 @@ print(data["content"])
 
 ### POST /api/system-prompt
 
-Save a new system prompt.
+Save custom instructions to append to the base system prompt.
 
 **Request Body:**
 ```json
 {
-  "content": "New system prompt text..."
+  "content": "Custom instructions to append..."
 }
 ```
 
@@ -50,9 +58,14 @@ Save a new system prompt.
 ```json
 {
   "success": true,
-  "message": "System prompt saved successfully"
+  "message": "Custom instructions saved successfully"
 }
 ```
+
+**Notes:**
+- The custom instructions will be appended to the hardcoded base prompt
+- You can send an empty string to clear custom instructions
+- The base prompt (schema + rules) is always included and cannot be modified
 
 **Example:**
 ```bash
@@ -65,13 +78,42 @@ curl -X POST https://opdo-v2-chat.onrender.com/api/system-prompt \
 ```python
 import requests
 
-new_prompt = """You are an expert optical engineer specializing in lens design.
-Your task is to generate optical designs based on user requirements."""
+custom_instructions = """Focus on compact lens designs.
+Prefer standard materials like BK7 when possible.
+Provide detailed explanations for material choices."""
 
 response = requests.post(
     "https://opdo-v2-chat.onrender.com/api/system-prompt",
-    json={"content": new_prompt}
+    json={"content": custom_instructions}
 )
+data = response.json()
+print(data["message"])
+```
+
+---
+
+### DELETE /api/system-prompt
+
+Clear all custom instructions and revert to using only the base system prompt.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Custom instructions cleared successfully"
+}
+```
+
+**Example:**
+```bash
+curl -X DELETE https://opdo-v2-chat.onrender.com/api/system-prompt
+```
+
+**Python example:**
+```python
+import requests
+
+response = requests.delete("https://opdo-v2-chat.onrender.com/api/system-prompt")
 data = response.json()
 print(data["message"])
 ```
@@ -80,19 +122,47 @@ print(data["message"])
 
 ## Storage
 
-- System prompts are stored in `prompts/system_prompt.txt`
-- The file is created automatically when the first prompt is saved
-- If no custom prompt is saved, the default hardcoded prompt is used
+- Custom instructions are stored in `prompts/system_prompt.txt`
+- The file is created automatically when instructions are saved
+- If no custom instructions exist, only the base prompt is used
 - The `prompts/*.txt` files are ignored by git (see `.gitignore`)
+
+## How It Works
+
+**System Prompt Structure:**
+```
+[ALWAYS INCLUDED] Base System Prompt (hardcoded in app.py)
+  ↓ Contains: JSON schema, design rules, material info
+
+[OPTIONAL] + Custom Instructions (from prompts/system_prompt.txt)
+  ↓ Contains: User preferences, additional constraints
+
+[OPTIONAL] + Per-Request Instructions (from request.system_message)
+  ↓ Contains: Specific instructions for this request only
+```
+
+**Example Final Prompt:**
+```
+You are an expert optical engineer... [full base prompt with schema]
+
+CUSTOM INSTRUCTIONS:
+Focus on compact designs. Prefer BK7 material.
+
+ADDITIONAL INSTRUCTIONS:
+Make this design suitable for mobile phone cameras.
+```
 
 ## Integration with Existing Endpoints
 
-The following endpoints now use the stored system prompt:
+The following endpoints use this prompt system:
 
-- **POST /api/design** - Uses stored prompt for optical design generation
-- **POST /api/chat** - Uses stored prompt for chat responses
+- **POST /api/design** - Generates optical designs using base + custom + per-request instructions
+- **POST /api/chat** - Chat interface using the same prompt hierarchy
 
-Both endpoints will use the custom system prompt if one has been saved, otherwise they fall back to the default prompt.
+Both endpoints automatically combine:
+1. Base system prompt (always)
+2. Custom instructions from file (if exists)
+3. Per-request `system_message` field (if provided)
 
 ## CORS Configuration
 

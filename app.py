@@ -178,21 +178,21 @@ If you want to provide an explanation, include it as a top-level "explanation" f
 SYSTEM_PROMPT_FILE = os.path.join("prompts", "system_prompt.txt")
 
 
-def get_stored_system_prompt() -> str:
+def get_custom_instructions() -> str:
     """
-    Load the system prompt from file storage.
-    Returns the default SYSTEM_PROMPT if file doesn't exist.
+    Load custom instructions from file storage.
+    Returns empty string if file doesn't exist or is empty.
+    These instructions will be appended to the base SYSTEM_PROMPT.
     """
     try:
         if os.path.exists(SYSTEM_PROMPT_FILE):
             with open(SYSTEM_PROMPT_FILE, "r", encoding="utf-8") as f:
                 content = f.read().strip()
-                # Return stored prompt if it has content, otherwise use default
-                return content if content else SYSTEM_PROMPT
-        return SYSTEM_PROMPT
+                return content
+        return ""
     except Exception as e:
-        print(f"Error reading system prompt file: {e}")
-        return SYSTEM_PROMPT
+        print(f"Error reading custom instructions file: {e}")
+        return ""
 
 
 def save_system_prompt(content: str) -> None:
@@ -216,46 +216,61 @@ async def root():
 @app.get("/api/system-prompt", response_model=SystemPromptResponse)
 async def get_system_prompt():
     """
-    Get the current system prompt.
-    Returns the stored prompt if it exists, otherwise returns the default prompt.
+    Get the current custom instructions.
+    Returns only the custom instructions appended to the base prompt.
+    Returns empty string if no custom instructions are set.
     """
     try:
-        content = get_stored_system_prompt()
+        content = get_custom_instructions()
         return SystemPromptResponse(content=content)
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error retrieving system prompt: {str(e)}"
+            detail=f"Error retrieving custom instructions: {str(e)}"
         )
 
 
 @app.post("/api/system-prompt", response_model=SystemPromptSaveResponse)
 async def update_system_prompt(request: SystemPromptRequest):
     """
-    Save a new system prompt.
-    The prompt will be persisted to disk and used for future design generation requests.
+    Save custom instructions to append to the base system prompt.
+    These instructions will be added after the hardcoded schema and rules.
     """
     try:
-        # Validate that content is not empty
-        if not request.content.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="System prompt content cannot be empty"
-            )
-
-        # Save the prompt
+        # Allow empty content (to clear custom instructions)
+        # Save the custom instructions
         save_system_prompt(request.content)
 
         return SystemPromptSaveResponse(
             success=True,
-            message="System prompt saved successfully"
+            message="Custom instructions saved successfully"
         )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error saving system prompt: {str(e)}"
+            detail=f"Error saving custom instructions: {str(e)}"
+        )
+
+
+@app.delete("/api/system-prompt", response_model=SystemPromptSaveResponse)
+async def delete_system_prompt():
+    """
+    Clear custom instructions and revert to using only the base system prompt.
+    """
+    try:
+        if os.path.exists(SYSTEM_PROMPT_FILE):
+            os.remove(SYSTEM_PROMPT_FILE)
+
+        return SystemPromptSaveResponse(
+            success=True,
+            message="Custom instructions cleared successfully"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error clearing custom instructions: {str(e)}"
         )
 
 
@@ -272,14 +287,17 @@ async def generate_optical_design(request: OpticalDesignRequest):
         OpticalDesignResponse containing the generated optical design
     """
     try:
-        # Build the system prompt - use stored prompt instead of hardcoded
-        base_system_prompt = get_stored_system_prompt()
+        # Build the system prompt - always start with the hardcoded base
+        system_prompt = SYSTEM_PROMPT
 
-        # If custom system_message is provided, append it to the base prompt
+        # Append custom instructions from file if they exist
+        custom_instructions = get_custom_instructions()
+        if custom_instructions:
+            system_prompt = f"{SYSTEM_PROMPT}\n\nCUSTOM INSTRUCTIONS:\n{custom_instructions}"
+
+        # If per-request system_message is provided, append it too
         if request.system_message:
-            system_prompt = f"{base_system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
-        else:
-            system_prompt = base_system_prompt
+            system_prompt = f"{system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
 
         # Prepare messages for Claude
         messages = []
@@ -372,14 +390,17 @@ async def chat_endpoint(request: OpticalDesignRequest):
     Alternative endpoint that returns raw Claude response for more flexible chat.
     """
     try:
-        # Build the system prompt - use stored prompt instead of hardcoded
-        base_system_prompt = get_stored_system_prompt()
+        # Build the system prompt - always start with the hardcoded base
+        system_prompt = SYSTEM_PROMPT
 
-        # If custom system_message is provided, append it
+        # Append custom instructions from file if they exist
+        custom_instructions = get_custom_instructions()
+        if custom_instructions:
+            system_prompt = f"{SYSTEM_PROMPT}\n\nCUSTOM INSTRUCTIONS:\n{custom_instructions}"
+
+        # If per-request system_message is provided, append it too
         if request.system_message:
-            system_prompt = f"{base_system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
-        else:
-            system_prompt = base_system_prompt
+            system_prompt = f"{system_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{request.system_message}"
 
         # Prepare messages
         messages = []
