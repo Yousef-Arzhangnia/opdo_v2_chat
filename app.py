@@ -315,7 +315,7 @@ async def generate_optical_design(request: OpticalDesignRequest):
             "role": "user",
             "content": request.user_message
         })
-
+        print(system_prompt,flush=True)
         # Call Claude API
         response = client.messages.create(
             model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5
